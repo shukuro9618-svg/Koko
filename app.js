@@ -7,7 +7,7 @@ const DEMO_POSITION = {
   longitude: 139.7358,
   address: "東京都新宿区市谷田町 1丁目",
 };
-const FALLBACK_ADDRESS = "東京都新宿区市谷田町 1丁目付近";
+const FALLBACK_ADDRESS = "現在地の住所を取得中";
 const params = new URLSearchParams(window.location.search);
 
 const depositButton = document.querySelector("#depositButton");
@@ -256,13 +256,108 @@ function formatPlace(position) {
   if (!position) return "場所不明";
   if (position.address) return position.address;
 
-  return FALLBACK_ADDRESS;
+  return formatCoordinates(position);
 }
 
 function formatMunicipality(position) {
   if (position?.address) return position.address;
 
-  return FALLBACK_ADDRESS;
+  return formatCoordinates(position);
+}
+
+function formatCoordinates(position) {
+  if (!position) return "場所不明";
+
+  return `${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}`;
+}
+
+function normalizeJapaneseAddress(data) {
+  const parts = [
+    data.principalSubdivision,
+    data.city || data.locality,
+    data.localityInfo?.administrative?.find((item) => item.adminLevel === 10)?.name,
+    data.localityInfo?.administrative?.find((item) => item.adminLevel === 11)?.name,
+  ].filter(Boolean);
+
+  return Array.from(new Set(parts)).join("");
+}
+
+function normalizeNominatimAddress(data) {
+  const address = data.address || {};
+  const district = address.city_district || address.suburb || address.quarter || address.neighbourhood;
+  const road = cleanRoadName(address.road);
+  const parts = [
+    address.state || address.province,
+    address.city || address.town || address.village || address.county,
+    district,
+    road,
+  ].filter(Boolean);
+
+  const uniqueParts = Array.from(new Set(parts));
+  const addressText = uniqueParts.join("");
+
+  if (address.country_code === "jp" && !/^[^都道府県]+[都道府県]/.test(addressText)) {
+    return `東京都${addressText}`;
+  }
+
+  return addressText;
+}
+
+function cleanRoadName(road) {
+  if (!road) return "";
+  if (/[;；]/.test(road)) return "";
+  if (/[0-9０-９]+階/.test(road)) return "";
+  if (/エレベーター|エスカレーター|改札|ホーム|出口|入口/.test(road)) return "";
+
+  return road;
+}
+
+function hasDetailedAddress(address) {
+  if (!address) return false;
+
+  return /[区市町村]/.test(address) && address.length > 4;
+}
+
+async function fetchNominatimAddress(position) {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("lat", String(position.latitude));
+  url.searchParams.set("lon", String(position.longitude));
+  url.searchParams.set("zoom", "18");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("accept-language", "ja");
+
+  const response = await fetch(url);
+  if (!response.ok) return "";
+
+  return normalizeNominatimAddress(await response.json());
+}
+
+async function fetchBigDataCloudAddress(position) {
+  const url = new URL("https://api.bigdatacloud.net/data/reverse-geocode-client");
+  url.searchParams.set("latitude", String(position.latitude));
+  url.searchParams.set("longitude", String(position.longitude));
+  url.searchParams.set("localityLanguage", "ja");
+
+  const response = await fetch(url);
+  if (!response.ok) return "";
+
+  return normalizeJapaneseAddress(await response.json());
+}
+
+async function enrichPositionWithAddress(position) {
+  if (!position || position.address) return position;
+
+  try {
+    const nominatimAddress = await fetchNominatimAddress(position);
+    const address = hasDetailedAddress(nominatimAddress)
+      ? nominatimAddress
+      : await fetchBigDataCloudAddress(position);
+
+    return address ? { ...position, address } : position;
+  } catch {
+    return position;
+  }
 }
 
 function setPlayerMeta(farewell) {
@@ -324,13 +419,16 @@ function watchLocation() {
   }
 
   navigator.geolocation.watchPosition(
-    (position) => {
+    async (position) => {
       currentPosition = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
       };
       updateRealMap(currentPosition);
+      enrichPositionWithAddress(currentPosition).then((enrichedPosition) => {
+        currentPosition = enrichedPosition;
+      });
       refreshNearby().catch(() => setStatus("預けた場所の確認に失敗しました"));
     },
     () => {
@@ -368,8 +466,9 @@ async function getPositionOnce() {
 async function getRitualPosition() {
   try {
     const position = await getPositionOnce();
-    if (demoNearby && !position.address) position.address = DEMO_POSITION.address;
-    return position;
+    const enrichedPosition = await enrichPositionWithAddress(position);
+    currentPosition = enrichedPosition;
+    return enrichedPosition;
   } catch (error) {
     if (demoNearby) return { ...DEMO_POSITION };
     throw error;
