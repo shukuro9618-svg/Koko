@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Koko</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="phone" aria-label="Koko">
+      <section class="map-shell no-nearby" id="mapShell">
+        <h1>Koko</h1>
+
+        <button class="nearby-card hidden" id="nearbyCard" type="button">
+          <span class="round-icon">
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <path d="M20 3.8c-7 0-12.7 5.5-12.7 12.4 0 9.4 12.7 20 12.7 20s12.7-10.6 12.7-20C32.7 9.3 27 3.8 20 3.8Z" />
+              <circle cx="20" cy="16.5" r="4.5" />
+              <path d="M10 34.4c3.5 1.8 16.5 1.8 20 0" />
+            </svg>
+          </span>
+          <span class="nearby-copy">
+            <strong>ここに別れが預けられています</strong>
+            <small>動画を再生する</small>
+          </span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m9 5 7 7-7 7" />
+          </svg>
+        </button>
+
+        <div class="real-map" id="realMap" aria-hidden="true"></div>
+        <p class="map-credit" aria-hidden="true">© OpenStreetMap © CARTO</p>
+        <div class="map-art" aria-hidden="true">
+          <svg viewBox="0 0 390 844" preserveAspectRatio="none">
+            <defs>
+              <filter id="soft">
+                <feGaussianBlur stdDeviation="0.35" />
+              </filter>
+            </defs>
+            <rect width="390" height="844" fill="#fbfaf7" />
+            <path class="river" d="M-20 365 C70 422 105 497 142 599 C169 674 236 715 408 713" />
+            <g class="roads" filter="url(#soft)">
+              <path d="M-20 230 C58 258 95 306 167 326 C226 343 302 314 418 350" />
+              <path d="M-10 155 C94 182 140 216 218 239 C282 258 327 243 410 270" />
+              <path d="M-30 510 C64 473 102 422 160 370 C210 326 254 298 422 245" />
+              <path d="M-5 635 C63 602 128 574 199 548 C269 523 324 508 407 470" />
+              <path d="M48 0 C64 104 74 169 77 260 C80 364 63 514 57 850" />
+              <path d="M162 -20 C149 87 143 168 154 255 C171 389 214 465 251 849" />
+              <path d="M286 -20 C274 89 279 203 301 318 C329 465 359 557 371 864" />
+              <path d="M-16 760 C75 724 162 689 243 665 C317 644 352 644 414 610" />
+              <path d="M-4 300 C73 284 136 284 203 296 C285 310 344 304 413 288" />
+              <path d="M110 -10 C121 83 119 190 106 278 C89 393 94 495 126 860" />
+              <path d="M226 -10 C216 79 213 157 229 227 C250 325 258 466 219 860" />
+              <path d="M-15 84 C63 91 137 116 202 151 C266 187 329 195 411 187" />
+              <path d="M-20 700 C75 671 132 626 204 593 C270 563 318 552 414 530" />
+            </g>
+            <g class="parks">
+              <path d="M62 395h50v62H62z" />
+              <path d="M274 394h50v64h-50z" />
+              <path d="M279 582h46v46h-46z" />
+              <path d="M72 690h45v45H72z" />
+              <path d="M266 126h30v30h-30z" />
+            </g>
+          </svg>
+        </div>
+
+        <div class="current-place" aria-hidden="true">
+          <div class="range"></div>
+          <div class="pin">
+            <svg viewBox="0 0 68 92">
+              <path d="M34 2C17.5 2 4 15.3 4 31.8 4 54.3 34 87.5 34 87.5s30-33.2 30-55.7C64 15.3 50.5 2 34 2Z" />
+              <circle cx="34" cy="31.6" r="12.2" />
+            </svg>
+          </div>
+        </div>
+
+        <button class="deposit" id="depositButton" type="button" aria-label="別れを預ける">
+          <span>
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="5.5" y="9.2" width="15.7" height="13.6" rx="2.2" />
+              <path d="m21.2 13.2 6.4-3.4v12.4l-6.4-3.4Z" />
+            </svg>
+          </span>
+          <strong>預ける</strong>
+        </button>
+
+        <button class="privacy-note" id="privacyNote" type="button">
+          <span class="lock-icon">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="7.8" y="13.4" width="16.4" height="13.2" rx="2.4" />
+              <path d="M11.2 13.4V9.8a4.8 4.8 0 0 1 9.6 0v3.6" />
+              <path d="M16 18v4.4" />
+            </svg>
+          </span>
+          <span>預けた別れは この場所でのみ再生できます。</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m9 5 7 7-7 7" />
+          </svg>
+        </button>
+
+        <p class="quiet-status" id="quietStatus" role="status">地図だけが表示されています</p>
+      </section>
+
+      <section class="ritual hidden" id="ritual" aria-label="別れを預ける儀式">
+        <div class="ritual-card">
+          <div class="ritual-video">
+            <video id="preview" autoplay muted playsinline></video>
+            <div class="ritual-scrim"></div>
+            <button class="close" id="closeRitual" type="button" aria-label="閉じる">×</button>
+            <div class="ritual-copy">
+              <strong id="countdown">5</strong>
+              <small id="recordingState">カメラと位置情報を準備しています</small>
+            </div>
+          </div>
+          <div class="ritual-panel">
+            <div class="ritual-place hidden" id="ritualPlace">
+              <span>預ける場所</span>
+              <strong>-</strong>
+            </div>
+            <p class="capture-hint" id="captureHint">押してから5秒間だけ撮影します</p>
+            <div class="ritual-actions">
+              <button class="ritual-action primary" id="startCapture" type="button">撮影開始</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="player hidden" id="player" aria-label="預けられた動画">
+        <div class="player-card">
+          <button class="close" id="closePlayer" type="button" aria-label="閉じる">×</button>
+          <video id="playback" controls playsinline></video>
+          <div class="player-meta" id="playerCaption">
+            <span>撮影日</span>
+            <strong>-</strong>
+            <span>撮影場所</span>
+            <strong>-</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

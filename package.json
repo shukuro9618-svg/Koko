@@ -1,0 +1,13 @@
+{
+  "name": "koko-gps-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "mkdir -p dist && cp index.html styles.css app.js dist/",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
