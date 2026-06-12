@@ -21,6 +21,7 @@ const preview = document.querySelector("#preview");
 const countdown = document.querySelector("#countdown");
 const recordingState = document.querySelector("#recordingState");
 const closeRitual = document.querySelector("#closeRitual");
+const switchCamera = document.querySelector("#switchCamera");
 const startCapture = document.querySelector("#startCapture");
 const ritualPlace = document.querySelector("#ritualPlace");
 const captureHint = document.querySelector("#captureHint");
@@ -38,6 +39,7 @@ let activeTimer = null;
 let recordingCancelled = false;
 let pendingFarewell = null;
 let demoNearby = params.has("nearby");
+let cameraFacingMode = "environment";
 let mapReady = false;
 let mapZoom = 15;
 let mapPosition = { ...DEMO_POSITION };
@@ -258,12 +260,9 @@ function formatPlace(position) {
 }
 
 function formatMunicipality(position) {
-  if (position?.address) {
-    const match = position.address.match(/^(.+?[都道府県].+?[市区町村])/);
-    return match ? match[1] : position.address;
-  }
+  if (position?.address) return position.address;
 
-  return "東京都新宿区";
+  return FALLBACK_ADDRESS;
 }
 
 function setPlayerMeta(farewell) {
@@ -389,6 +388,7 @@ function resetRecorderUi() {
   startCapture.disabled = true;
   startCapture.textContent = "撮影開始";
   startCapture.dataset.mode = "record";
+  switchCamera.disabled = true;
   captureHint.textContent = "押してから5秒間だけ撮影します";
   ritualPlace.classList.add("hidden");
 }
@@ -398,6 +398,43 @@ function stopStream() {
   activeStream.getTracks().forEach((track) => track.stop());
   activeStream = null;
   preview.srcObject = null;
+}
+
+async function openCameraStream() {
+  stopStream();
+
+  activeStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: cameraFacingMode } },
+    audio: true,
+  });
+  preview.srcObject = activeStream;
+  switchCamera.disabled = false;
+}
+
+async function toggleCamera() {
+  if (activeRecorder?.state === "recording") return;
+  if (startCapture.dataset.mode === "confirm") return;
+
+  const previousFacingMode = cameraFacingMode;
+  cameraFacingMode = cameraFacingMode === "environment" ? "user" : "environment";
+  switchCamera.disabled = true;
+  recordingState.textContent = cameraFacingMode === "user" ? "インカメラに切り替えています" : "外カメラに切り替えています";
+
+  try {
+    await openCameraStream();
+    recordingState.textContent = cameraFacingMode === "user" ? "インカメラで撮影できます" : "外カメラで撮影できます";
+    startCapture.disabled = false;
+  } catch (error) {
+    cameraFacingMode = previousFacingMode;
+    try {
+      await openCameraStream();
+      recordingState.textContent = "この端末では切り替えられません";
+      startCapture.disabled = false;
+    } catch {
+      recordingState.textContent = "カメラの許可が必要です";
+      setStatus("カメラと位置情報の許可が必要です");
+    }
+  }
 }
 
 function closeRitualView() {
@@ -421,11 +458,7 @@ async function startRitual() {
     setRitualPlace(position);
     recordingState.textContent = "カメラが起動しました";
 
-    activeStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: true,
-    });
-    preview.srcObject = activeStream;
+    await openCameraStream();
     startCapture.disabled = false;
     countdown.hidden = true;
   } catch (error) {
@@ -443,6 +476,7 @@ async function startRecording() {
     recordingState.textContent = "5秒だけ録画しています";
     countdown.hidden = false;
     startCapture.disabled = true;
+    switchCamera.disabled = true;
     captureHint.textContent = "撮影しています";
 
     const chunks = [];
@@ -478,6 +512,7 @@ async function startRecording() {
       startCapture.textContent = "預ける";
       startCapture.dataset.mode = "confirm";
       startCapture.disabled = false;
+      switchCamera.disabled = true;
       captureHint.textContent = "この場所に預けますか";
     };
 
@@ -553,6 +588,7 @@ function closePlayerView() {
 
 depositButton.addEventListener("click", startRitual);
 closeRitual.addEventListener("click", closeRitualView);
+switchCamera.addEventListener("click", toggleCamera);
 startCapture.addEventListener("click", handleRitualAction);
 nearbyCard.addEventListener("click", openPlayer);
 privacyNote.addEventListener("click", () => {
