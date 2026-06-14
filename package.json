@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/write-config.mjs && mkdir -p dist && cp index.html concept.html styles.css app.js config.js manifest.json sw.js icon.svg dist/",
+    "build": "node scripts/build.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "devDependencies": {
