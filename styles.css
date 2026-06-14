@@ -449,12 +449,15 @@ h1 {
 
 .privacy-note {
   position: absolute;
+  display: grid;
   left: 50%;
   right: auto;
   width: min(342px, calc(100vw - 48px));
   transform: translateX(-50%);
   bottom: 36px;
   min-height: 58px;
+  grid-template-columns: 41px minmax(0, 1fr) 20px;
+  align-items: center;
   border-radius: 13px;
   padding: 10px 12px;
   gap: 13px;
@@ -483,11 +486,22 @@ h1 {
   min-width: 0;
   font-size: 11.5px;
   line-height: 1.5;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .privacy-note .chevron {
-  display: none;
+  display: block;
+  width: 20px;
+  height: 20px;
+  color: rgba(74, 92, 63, 0.48);
+}
+
+.privacy-note .chevron path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .quiet-status {
@@ -770,6 +784,283 @@ h1 {
   line-height: 1.35;
   font-weight: 500;
   word-break: break-word;
+}
+
+.backup-panel {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: 18px;
+  display: grid;
+  width: min(342px, calc(100vw - 40px));
+  transform: translateX(-50%);
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(93, 125, 78, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 44px rgba(43, 57, 39, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.backup-panel.hidden {
+  display: none;
+}
+
+.backup-panel div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.backup-panel strong {
+  color: rgba(41, 56, 37, 0.82);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.backup-panel span {
+  overflow: hidden;
+  color: rgba(41, 43, 39, 0.56);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-panel button,
+.backup-panel label {
+  display: inline-grid;
+  min-height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(92, 127, 74, 0.12);
+  color: #527242;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.backup-panel input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.concept-phone {
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 50% 14%, rgba(117, 150, 98, 0.12), transparent 30%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.94), rgba(251, 250, 247, 0.78) 36%, rgba(239, 246, 234, 0.62)),
+    #fbfaf7;
+  -webkit-overflow-scrolling: touch;
+}
+
+.concept-page {
+  min-height: 100%;
+  padding: max(18px, env(safe-area-inset-top)) 26px max(34px, env(safe-area-inset-bottom));
+  color: #263020;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
+.concept-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
+  align-items: center;
+  margin: 0 -10px 18px;
+  padding: 8px 10px 12px;
+  background: linear-gradient(to bottom, rgba(251, 250, 247, 0.96), rgba(251, 250, 247, 0.72), transparent);
+  backdrop-filter: blur(12px);
+}
+
+.concept-header h1 {
+  margin: 0;
+  color: #5d854c;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+}
+
+.concept-back {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  color: rgba(49, 68, 42, 0.72);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 0 0 1px rgba(86, 120, 72, 0.08);
+}
+
+.concept-back svg {
+  width: 19px;
+  height: 19px;
+}
+
+.concept-back path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.concept-body {
+  display: grid;
+  gap: 28px;
+  padding: 4px 0 20px;
+}
+
+.concept-hero {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px 10px 28px;
+  text-align: center;
+}
+
+.concept-mark {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  border-radius: 50%;
+  color: #5d854c;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.96), rgba(247, 250, 244, 0.82)),
+    rgba(255, 255, 255, 0.76);
+  box-shadow:
+    0 18px 44px rgba(70, 91, 58, 0.12),
+    inset 0 0 0 1px rgba(91, 128, 74, 0.08);
+}
+
+.concept-mark svg {
+  width: 38px;
+  height: 38px;
+}
+
+.concept-mark svg * {
+  fill: currentColor;
+}
+
+.concept-lead {
+  max-width: 278px;
+  margin: 0;
+  color: rgba(38, 48, 32, 0.88);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.85;
+}
+
+.concept-lead span {
+  white-space: nowrap;
+}
+
+.concept-steps {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding-left: 3px;
+}
+
+.concept-steps::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  bottom: 30px;
+  left: 18px;
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(98, 134, 80, 0.1), rgba(98, 134, 80, 0.28), rgba(98, 134, 80, 0.08));
+}
+
+.concept-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 15px;
+  padding: 2px 0 30px;
+}
+
+.concept-step:last-child {
+  padding-bottom: 2px;
+}
+
+.concept-number {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  color: #5a7e49;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow:
+    0 10px 24px rgba(62, 82, 53, 0.09),
+    inset 0 0 0 1px rgba(88, 120, 72, 0.12);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.concept-step div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.concept-body h2 {
+  margin: 3px 0 4px;
+  color: #456b3b;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.concept-body p {
+  margin: 0;
+  color: rgba(38, 48, 32, 0.76);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.88;
+  letter-spacing: 0;
+}
+
+.concept-note {
+  display: grid;
+  gap: 11px;
+  padding: 20px 0 2px 51px;
+  border-top: 1px solid rgba(98, 134, 80, 0.11);
+}
+
+.concept-ending {
+  display: grid;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 24px 24px 26px;
+  border-radius: 21px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow:
+    0 18px 50px rgba(70, 91, 58, 0.1),
+    inset 0 0 0 1px rgba(98, 134, 80, 0.08);
+}
+
+.concept-ending p {
+  color: rgba(38, 48, 32, 0.9);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.9;
 }
 
 .hidden {

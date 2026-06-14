@@ -2,6 +2,7 @@ const DB_NAME = "koko-gps";
 const STORE = "farewells";
 const UNLOCK_METERS = 45;
 const RECORDING_SECONDS = 5;
+const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2";
 const DEMO_POSITION = {
   latitude: 35.6916,
   longitude: 139.7358,
@@ -29,8 +30,13 @@ const player = document.querySelector("#player");
 const playback = document.querySelector("#playback");
 const playerCaption = document.querySelector("#playerCaption");
 const closePlayer = document.querySelector("#closePlayer");
+const backupPanel = document.querySelector("#backupPanel");
+const backupStatus = document.querySelector("#backupStatus");
+const exportBackup = document.querySelector("#exportBackup");
+const importBackup = document.querySelector("#importBackup");
 
 let dbPromise;
+let cloudPromise;
 let currentPosition = null;
 let nearbyFarewell = null;
 let activeStream = null;
@@ -47,6 +53,49 @@ let zoomRemainder = 0;
 const activePointers = new Map();
 let pinchStartDistance = null;
 let pinchStartZoom = mapZoom;
+
+function getSupabaseConfig() {
+  const config = window.KOKO_CONFIG || {};
+  const supabaseUrl = (config.supabaseUrl || "").trim();
+  const supabaseAnonKey = (config.supabaseAnonKey || "").trim();
+  const supabaseBucket = (config.supabaseBucket || "farewell-videos").trim();
+
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  return { supabaseUrl, supabaseAnonKey, supabaseBucket };
+}
+
+async function getCloud() {
+  if (cloudPromise) return cloudPromise;
+
+  const config = getSupabaseConfig();
+  if (!config) return null;
+
+  cloudPromise = (async () => {
+    const { createClient } = await import(SUPABASE_JS_URL);
+    const client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    });
+    const { data: sessionData } = await client.auth.getSession();
+    let user = sessionData.session?.user || null;
+
+    if (!user) {
+      const { data, error } = await client.auth.signInAnonymously();
+      if (error) throw error;
+      user = data.user;
+    }
+
+    return { client, user, bucket: config.supabaseBucket };
+  })().catch((error) => {
+    cloudPromise = null;
+    console.warn("Supabase is unavailable", error);
+    return null;
+  });
+
+  return cloudPromise;
+}
 
 function openDb() {
   if (dbPromise) return dbPromise;
@@ -69,7 +118,7 @@ function openDb() {
   return dbPromise;
 }
 
-async function saveFarewell(farewell) {
+async function saveLocalFarewell(farewell) {
   const db = await openDb();
 
   await new Promise((resolve, reject) => {
@@ -80,7 +129,7 @@ async function saveFarewell(farewell) {
   });
 }
 
-async function listFarewells() {
+async function listLocalFarewells() {
   const db = await openDb();
 
   return new Promise((resolve, reject) => {
@@ -89,6 +138,255 @@ async function listFarewells() {
     request.onsuccess = () => resolve(request.result || []);
     request.onerror = () => reject(request.error);
   });
+}
+
+function cloudRecordToFarewell(record) {
+  return {
+    id: record.id,
+    blob: null,
+    videoPath: record.video_path,
+    source: "cloud",
+    position: {
+      latitude: record.latitude,
+      longitude: record.longitude,
+      address: record.address || "",
+    },
+    radius: record.radius_meters || UNLOCK_METERS,
+    createdAt: record.recorded_at || record.created_at,
+  };
+}
+
+function getNearbyBounds(position, radiusMeters = UNLOCK_METERS * 2) {
+  const latDelta = radiusMeters / 111320;
+  const lngDelta = radiusMeters / (111320 * Math.cos((position.latitude * Math.PI) / 180));
+
+  return {
+    minLat: position.latitude - latDelta,
+    maxLat: position.latitude + latDelta,
+    minLng: position.longitude - lngDelta,
+    maxLng: position.longitude + lngDelta,
+  };
+}
+
+async function saveCloudFarewell(farewell) {
+  const cloud = await getCloud();
+  if (!cloud || !farewell.blob) return false;
+
+  const extension = farewell.blob.type.includes("mp4") ? "mp4" : "webm";
+  const path = `${cloud.user.id}/${farewell.id}.${extension}`;
+  const upload = await cloud.client.storage.from(cloud.bucket).upload(path, farewell.blob, {
+    contentType: farewell.blob.type || "video/webm",
+    upsert: false,
+  });
+
+  if (upload.error) throw upload.error;
+
+  const insert = await cloud.client.from("farewells").insert({
+    id: farewell.id,
+    user_id: cloud.user.id,
+    video_path: path,
+    latitude: farewell.position.latitude,
+    longitude: farewell.position.longitude,
+    address: farewell.position.address || null,
+    radius_meters: farewell.radius || UNLOCK_METERS,
+    recorded_at: farewell.createdAt,
+  });
+
+  if (insert.error) throw insert.error;
+  return true;
+}
+
+async function listCloudFarewells(position) {
+  const cloud = await getCloud();
+  if (!cloud) return [];
+
+  let query = cloud.client
+    .from("farewells")
+    .select("id, video_path, latitude, longitude, address, radius_meters, recorded_at, created_at")
+    .eq("user_id", cloud.user.id)
+    .order("recorded_at", { ascending: false })
+    .limit(200);
+
+  if (position) {
+    const bounds = getNearbyBounds(position);
+    query = query
+      .gte("latitude", bounds.minLat)
+      .lte("latitude", bounds.maxLat)
+      .gte("longitude", bounds.minLng)
+      .lte("longitude", bounds.maxLng);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).map(cloudRecordToFarewell);
+}
+
+async function saveFarewell(farewell) {
+  await saveLocalFarewell(farewell);
+
+  try {
+    const savedCloud = await saveCloudFarewell(farewell);
+    if (savedCloud) setStatus("この場所に思い出を預けました");
+  } catch (error) {
+    setStatus("端末には保存しました。クラウド保存はあとで再確認してください");
+  }
+}
+
+async function getFarewellBlob(farewell) {
+  if (farewell.blob) return farewell.blob;
+  if (!farewell.videoPath) return null;
+
+  const cloud = await getCloud();
+  if (!cloud) return null;
+
+  const { data, error } = await cloud.client.storage.from(cloud.bucket).download(farewell.videoPath);
+  if (error) throw error;
+  return data;
+}
+
+async function listFarewells(position) {
+  const localFarewells = await listLocalFarewells();
+  let cloudFarewells = [];
+
+  try {
+    cloudFarewells = await listCloudFarewells(position);
+  } catch (error) {
+    cloudFarewells = [];
+  }
+
+  const merged = new Map();
+  for (const farewell of cloudFarewells) merged.set(farewell.id, farewell);
+  for (const farewell of localFarewells) merged.set(farewell.id, farewell);
+  return Array.from(merged.values());
+}
+
+async function syncLocalFarewellsToCloud() {
+  if (!getSupabaseConfig()) return;
+
+  const localFarewells = await listLocalFarewells();
+  let synced = 0;
+
+  for (const farewell of localFarewells) {
+    if (!farewell.blob) continue;
+
+    try {
+      const saved = await saveCloudFarewell(farewell);
+      if (saved) synced += 1;
+    } catch (error) {
+      // Already-synced rows or temporary network failures should not interrupt the app.
+    }
+  }
+
+  if (synced > 0) setStatus(`${synced}件の保存をクラウドへ移しました`);
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
+
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function updateBackupStatus() {
+  if (!backupStatus) return;
+
+  const farewells = await listFarewells(currentPosition);
+  backupStatus.textContent = `${farewells.length}件の保存があります`;
+}
+
+async function handleExportBackup() {
+  if (!backupStatus || !exportBackup) return;
+
+  exportBackup.disabled = true;
+  backupStatus.textContent = "書き出しています";
+
+  try {
+    const farewells = await listFarewells();
+    const records = await Promise.all(
+      farewells.map(async (farewell) => {
+        const blob = await getFarewellBlob(farewell);
+
+        return {
+          id: farewell.id,
+          position: farewell.position,
+          radius: farewell.radius || UNLOCK_METERS,
+          createdAt: farewell.createdAt,
+          video: blob ? await blobToDataUrl(blob) : null,
+        };
+      }),
+    );
+    const stamped = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+
+    downloadJson(`koko-backup-${stamped}.json`, {
+      app: "koko",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      records,
+    });
+    backupStatus.textContent = `${records.length}件を書き出しました`;
+  } catch (error) {
+    backupStatus.textContent = "書き出しに失敗しました";
+  } finally {
+    exportBackup.disabled = false;
+  }
+}
+
+async function handleImportBackup(event) {
+  const [file] = Array.from(event.target.files || []);
+  if (!file || !backupStatus) return;
+
+  backupStatus.textContent = "読み込んでいます";
+
+  try {
+    const payload = JSON.parse(await file.text());
+    const records = Array.isArray(payload.records) ? payload.records : [];
+
+    for (const record of records) {
+      if (!record.id || !record.position || !record.video) continue;
+
+      await saveFarewell({
+        id: record.id,
+        blob: await dataUrlToBlob(record.video),
+        position: record.position,
+        radius: record.radius || UNLOCK_METERS,
+        createdAt: record.createdAt || new Date().toISOString(),
+      });
+    }
+
+    await refreshNearby();
+    backupStatus.textContent = `${records.length}件を読み込みました`;
+  } catch (error) {
+    backupStatus.textContent = "読み込みに失敗しました";
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function distanceMeters(a, b) {
@@ -387,7 +685,7 @@ async function refreshNearby() {
     };
     nearbyCard.classList.remove("hidden");
     mapShell.classList.remove("no-nearby");
-    setStatus("この場所で預けられた別れがあります");
+    setStatus("この場所で預けられた思い出があります");
     return;
   }
 
@@ -403,7 +701,7 @@ async function refreshNearby() {
   mapShell.classList.toggle("no-nearby", !nearbyFarewell);
 
   if (nearbyFarewell) {
-    setStatus("この場所で預けられた別れがあります");
+    setStatus("この場所で預けられた思い出があります");
   } else {
     setStatus("地図だけが表示されています");
   }
@@ -642,7 +940,7 @@ async function confirmPendingDeposit() {
   ritual.classList.add("hidden");
   resetRecorderUi();
   await refreshNearby();
-  setStatus("この場所に別れを預けました");
+  setStatus("この場所に思い出を預けました");
 }
 
 function handleRitualAction() {
@@ -654,7 +952,7 @@ function handleRitualAction() {
   startRecording();
 }
 
-function openPlayer() {
+async function openPlayer() {
   if (demoNearby && nearbyFarewell && !nearbyFarewell.blob) {
     setPlayerMeta(nearbyFarewell);
     playback.removeAttribute("src");
@@ -670,7 +968,20 @@ function openPlayer() {
     return;
   }
 
-  const url = URL.createObjectURL(nearbyFarewell.blob);
+  let blob = null;
+  try {
+    blob = await getFarewellBlob(nearbyFarewell);
+  } catch (error) {
+    setStatus("動画を読み込めませんでした");
+    return;
+  }
+
+  if (!blob) {
+    setStatus("動画を読み込めませんでした");
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
   playback.src = url;
   playback.onended = () => URL.revokeObjectURL(url);
   setPlayerMeta(nearbyFarewell);
@@ -691,15 +1002,23 @@ switchCamera.addEventListener("click", toggleCamera);
 startCapture.addEventListener("click", handleRitualAction);
 nearbyCard.addEventListener("click", openPlayer);
 privacyNote.addEventListener("click", () => {
-  setStatus("預けた動画の場所は、地図上には表示されません");
+  window.location.href = "./concept.html";
 });
 closePlayer.addEventListener("click", closePlayerView);
+exportBackup?.addEventListener("click", handleExportBackup);
+importBackup?.addEventListener("change", handleImportBackup);
 
 openDb()
   .then(() => {
     setStatus("地図だけが表示されています");
+    registerServiceWorker();
     setupMapZoomGestures();
     initRealMap();
+    syncLocalFarewellsToCloud().catch(() => {});
+    if (params.has("backup") && backupPanel) {
+      backupPanel.classList.remove("hidden");
+      updateBackupStatus();
+    }
     if (demoNearby) updateRealMap(DEMO_POSITION);
     if (demoNearby) {
       nearbyCard.classList.remove("hidden");
@@ -711,7 +1030,7 @@ openDb()
         radius: UNLOCK_METERS,
         createdAt: new Date().toISOString(),
       };
-      setStatus("この場所で預けられた別れがあります");
+      setStatus("この場所で預けられた思い出があります");
     }
     watchLocation();
   })
