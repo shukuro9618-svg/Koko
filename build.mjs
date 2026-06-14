@@ -1,7 +1,7 @@
 import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
 
-const root = new URL("../", import.meta.url);
-const dist = new URL("../dist/", import.meta.url);
+const root = new URL("./", import.meta.url);
+const dist = new URL("./dist/", import.meta.url);
 const config = {
   supabaseUrl: process.env.VITE_SUPABASE_URL || "",
   supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || "",
